@@ -1,0 +1,85 @@
+x-logging:
+  &logging
+  logging:
+    options:
+      max-size: 50m
+      max-file: "3"
+
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "443:443"
+    command:
+      - "--api=true"
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--log.level=DEBUG"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=$EMAIL"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    volumes:
+      - "traefik_letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.ipallowlist.ipallowlist.sourcerange=$WHITELIST"
+
+
+  erigon:
+    image: docker thorax/erigon:$ERIGON_VERSION
+    user: root
+    restart: unless-stopped
+    container_name: erigon
+    stop_grace_period: 3m
+    env_file:
+      - .env
+    expose:
+      - 8545
+      - 8551
+      - 6060
+      - 9090
+    ports:
+      - 30303:30303
+      - 30304:30304
+      - 42069:42069
+    volumes:
+      - ./erigon-data:/home/erigon/.local/share/erigon
+      - ./jwt.hex:/jwt:ro
+    command: |
+      --chain mainnet
+      --authrpc.jwtsecret=/jwt
+      --authrpc.addr=0.0.0.0
+      --authrpc.vhosts=*
+      --internalcl
+      --db.size.limit=8TB
+      --db.pagesize=16kb
+      --http.addr=0.0.0.0
+      --http.vhosts=*
+      --http.corsdomain=*
+      --http.api=eth,debug,web3,erigon,trace,net,txpool
+      --private.api.addr=0.0.0.0:9090
+      --metrics
+      --metrics.addr=0.0.0.0
+      --ws
+      --torrent.download.rate 1024mb
+      --rpc.returndata.limit=1000000
+
+    <<: *logging
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.services.erigon.loadbalancer.server.port=8547"
+    - "traefik.http.routers.erigon.entrypoints=websecure"
+    - "traefik.http.routers.erigon.tls.certresolver=myresolver"
+    - "traefik.http.routers.erigon.rule=Host(`$DOMAIN`)"
+    - "traefik.http.routers.erigon.middlewares=ipallowlist"
+
+volumes:
+  traefik_letsencrypt:
