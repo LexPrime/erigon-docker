@@ -18,7 +18,7 @@ services:
       - "--api=true"
       - "--api.insecure=true"
       - "--api.dashboard=true"
-      - "--log.level=DEBUG"
+      - "--log.level=INFO"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.websecure.address=:443"
@@ -28,6 +28,7 @@ services:
     volumes:
       - "traefik_letsencrypt:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    <<: *logging
     labels:
       - "traefik.enable=true"
       - "traefik.http.middlewares.ipallowlist.ipallowlist.sourcerange=$WHITELIST"
@@ -46,17 +47,22 @@ services:
       - 8551
       - 6060
       - 9090
+      - 5555
     ports:
       - 30303:30303
       - 30304:30304
       - 42069:42069
+      - 4000:4000
+      - 4001:4001
     volumes:
-      - ./erigon-data:/root/.local/share/erigon
+      - ./data:/root/.local/share/erigon
       - ./jwt.hex:/jwt:ro
     command: |
-      --chain mainnet
+      --chain=mainnet
       --authrpc.jwtsecret=/jwt
       --authrpc.addr=0.0.0.0
+      --beacon.api=beacon
+      --beacon.api.addr=0.0.0.0
       --authrpc.vhosts=*
       --db.size.limit=8TB
       --db.pagesize=16kb
@@ -68,9 +74,10 @@ services:
       --metrics
       --metrics.addr=0.0.0.0
       --ws
-      --torrent.download.rate 1024mb
+      --torrent.download.rate=1024mb
       --rpc.returndata.limit=1000000
-
+      --sync.loop.block.limit=10_000
+      --batchSize=2g
     <<: *logging
     labels:
     - "traefik.enable=true"
