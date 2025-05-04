@@ -22,6 +22,8 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.websecure.address=:443"
+      - "--metrics.prometheus.addEntryPointsLabels=true"
+      - "--metrics.prometheus.addServicesLabels=true"
       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
       - "--certificatesresolvers.myresolver.acme.email=$EMAIL"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
@@ -33,7 +35,14 @@ services:
       - "traefik.enable=true"
       - "traefik.http.middlewares.ipallowlist.ipallowlist.sourcerange=$WHITELIST"
 
-  erigon:
+      - "traefik.http.routers.metrics.rule=Host(`$DOMAIN`) && PathPrefix(`/metrics`)"
+      - "traefik.http.services.metrics.loadbalancer.server.port=8082"
+      - "traefik.http.routers.metrics.entrypoints=websecure"
+      - "traefik.http.routers.metrics.tls.certresolver=myresolver"
+      - "traefik.http.routers.metrics.middlewares=ipallowlist"
+
+
+  erigon-hz8:
     image: erigontech/erigon:$ERIGON_VERSION
     user: root
     restart: unless-stopped
@@ -55,11 +64,11 @@ services:
       - 4001:4001
     volumes:
       - ./data:/root/.local/share/erigon
-      - ./jwt.hex:/jwt:ro
+      - ./data/jwt.hex:/root/.local/share/erigon/jwt.hex:ro
     command: |
       --chain=mainnet
       --prune.mode=archive
-      --authrpc.jwtsecret=/jwt
+      --authrpc.jwtsecret=/root/.local/share/erigon/jwt.hex
       --authrpc.addr=0.0.0.0
       --beacon.api=beacon
       --beacon.api.addr=0.0.0.0
